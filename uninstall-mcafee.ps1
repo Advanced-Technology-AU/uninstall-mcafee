@@ -7,6 +7,7 @@ if (Get-Package | Where-Object Name -Like "*McAfee*") {
     # newer version's don't work silently, there are added checks 
     $url = "https://github.com/ADVSebastian/uninstall-mcafee/raw/refs/heads/main/mcafeeclean.zip"
     $zip = "C:\temp\MCPR.zip"
+    New-Item -ItemType Directory -Path "C:\temp" -Force | Out-Null
     Invoke-WebRequest -Uri $url -OutFile $zip
     Expand-Archive -LiteralPath $zip -DestinationPath "C:\temp\MCPR" -Force
     $binary = "C:\temp\MCPR\Mccleanup.exe"
@@ -14,16 +15,23 @@ if (Get-Package | Where-Object Name -Like "*McAfee*") {
     # Run the tool silently
     Start-Process -FilePath $binary -ArgumentList $arguments -Wait
 
-    # Remove the downloaded file
-    Remove-Item -Path $destination -Force
+    # Remove the downloaded zip and extracted tool
+    Remove-Item -Path $zip, "C:\temp\MCPR" -Recurse -Force -ErrorAction SilentlyContinue
     Write-Host "McAfee Removal Tool has been run"
 
 
     $InstalledPrograms = (Get-Package | Where-Object Name -like "*McAfee*")
     $InstalledPrograms | ForEach-Object {
 
-        write-output "Attempting to uninstall: [$($_.Name)]..."
-        $uninstallcommand = $_.String
+        $name = $_.Name
+        write-output "Attempting to uninstall: [$name]..."
+        # Get-Package has no .String property; uninstall strings live in Meta attributes
+        $uninstallcommand = $_.Meta.Attributes["QuietUninstallString"]
+        if (-not $uninstallcommand) { $uninstallcommand = $_.Meta.Attributes["UninstallString"] }
+        if (-not $uninstallcommand) {
+            Write-Warning -Message "No uninstall string found for: [$name]"
+            return
+        }
 
         Try {
             if ($uninstallcommand -match "^msiexec*") {
@@ -32,17 +40,29 @@ if (Get-Package | Where-Object Name -Like "*McAfee*") {
                 $uninstallcommand = $uninstallcommand + " /quiet /norestart"
                 $uninstallcommand = $uninstallcommand -replace "/I", "/X "
                 #Uninstall with string2 params
-                Start-Process 'msiexec.exe' -ArgumentList $uninstallcommand -NoNewWindow -Wait
+                Start-Process 'msiexec.exe' -ArgumentList $uninstallcommand -NoNewWindow -Wait -ErrorAction Stop
             }
             else {
-                #Exe installer, run straight path
-                $string2 = $uninstallcommand
-                start-process $string2
+                #Exe installer, split executable path from its arguments
+                if ($uninstallcommand -match '^\s*"([^"]+)"\s*(.*)$' -or $uninstallcommand -match '^\s*(.+?\.exe)\s*(.*)$') {
+                    $exe = $Matches[1]
+                    $exeArgs = $Matches[2]
+                }
+                else {
+                    $exe = $uninstallcommand
+                    $exeArgs = ""
+                }
+                if ($exeArgs) {
+                    Start-Process -FilePath $exe -ArgumentList $exeArgs -Wait -ErrorAction Stop
+                }
+                else {
+                    Start-Process -FilePath $exe -Wait -ErrorAction Stop
+                }
             }
-            
-            write-output "Successfully uninstalled: [$($_.Name)]"
+
+            write-output "Successfully uninstalled: [$name]"
         }
-        Catch { Write-Warning -Message "Failed to uninstall: [$($_.Name)]" }
+        Catch { Write-Warning -Message "Failed to uninstall: [$name] - $($_.Exception.Message)" }
     }
 
     ##Remove Safeconnect
