@@ -5,7 +5,7 @@ if (Get-Package | Where-Object Name -Like "*McAfee*") {
     # Download MCPR from here, upload to your hosting provider https://www.mcafee.com/support/s/article/000001616?language=en_US
     # $url = "https://download.mcafee.com/molbin/iss-loc/SupportTools/MCPR/MCPR.exe"
     # newer version's don't work silently, there are added checks 
-    $url = "https://github.com/ADVSebastian/uninstall-mcafee/raw/refs/heads/main/mcafeeclean.zip"
+    $url = "https://github.com/Advanced-Technology-AU/uninstall-mcafee/raw/refs/heads/main/mcafeeclean.zip"
     $zip = "C:\temp\MCPR.zip"
     New-Item -ItemType Directory -Path "C:\temp" -Force | Out-Null
     Invoke-WebRequest -Uri $url -OutFile $zip
